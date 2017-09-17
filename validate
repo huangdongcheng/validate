@@ -1,0 +1,101 @@
+<?php
+
+class validate
+{
+	static private $_instance = null;
+	private $_data = [];
+	private $_rule = [];
+	private $_message = [];
+	private $_attribute = [];
+
+	private function __contruct()
+	{
+
+	}
+
+	static private function instance()
+	{
+		if(empty(static::$_instance)){
+			return new self;
+		}
+
+		return static::$_instance;
+	}
+
+	static public function make($data = [], $rule = [], $message = [], $attribute = [])
+	{
+		try{
+			$instance = static::instance();
+			$instance->data = $data;
+			$instance->rule = $rule;
+			$instance->message = $message;
+			$instance->attribute = $attribute;
+
+			$instance->_validate();
+
+			return [];
+		}catch(\Exception $e){
+			var_dump($e->getMessage());
+			return [
+				'error' => $e->getMessage()
+			];
+		}
+	}
+
+	public function _validate()
+	{
+		array_walk($this->rule, function($value, $key){
+			$function = '_'.$value;
+			$result = $this->$function($key);
+
+			if(!$result){
+				throw new Exception($this->message[$key]);
+			}
+		});
+	}
+
+	public function _required($name)
+	{
+		return !empty($this->data[$name]);
+	}
+
+	public function _int($name)
+	{
+		var_dump(4);
+	}
+
+	public function _email()
+	{
+		return false;
+	}
+
+	public function _numeric()
+	{
+
+	}
+
+	public function _min()
+	{
+
+	}
+
+	public function _max()
+	{
+
+	}
+
+	public function __call($method, $argument)
+	{
+		throw new Exception("undefined property ".substr($method, 1));
+	}
+
+	static public function __callStatic($method, $arguments)
+	{
+		throw new Exception("undefined method $method");
+	}
+}
+
+validate::make(['name' => 'xinzhu', 'title' => 'ceshi', 'email' => '934@qq.com'], ['name' => 'required1', 'title' => 'required', 'email' => 'email']);
+
+
+
