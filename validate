@@ -1,101 +1,229 @@
 <?php
 
-class validate
+namespace App\Validation;
+
+/**
+ * form表单验证类
+ *
+ * Class Validate
+ * @package App\Validation
+ */
+class Validate
 {
-	static private $_instance = null;
-	private $_data = [];
-	private $_rule = [];
-	private $_message = [];
-	private $_attribute = [];
+    static private $_instance;
+    private $_data = [];
+    private $_rule = [];
+    private $_message = [];
+    private $_attribute = [];
+    private $_errors = null;
 
-	private function __contruct()
-	{
+    private function __construct()
+    {
+    }
 
-	}
+    static private function instance()
+    {
+        if (empty(static::$_instance)) {
+            static::$_instance = new self();
+        }
 
-	static private function instance()
-	{
-		if(empty(static::$_instance)){
-			return new self;
-		}
+        return static::$_instance;
+    }
 
-		return static::$_instance;
-	}
+    /**
+     * 验证入口
+     *
+     * @param array $data
+     * @param array $rule
+     * @param array $message
+     * @param array $attribute
+     * @return bool
+     */
+    static public function make(array $data = [], array $rule = [], array $message = [], array $attribute = [])
+    {
+        try {
+            $instance = static::instance();
+            $instance->_data = $data;
+            $instance->_rule = $rule;
+            $instance->_message = $message;
+            $instance->_attribute = $attribute;
 
-	static public function make($data = [], $rule = [], $message = [], $attribute = [])
-	{
-		try{
-			$instance = static::instance();
-			$instance->data = $data;
-			$instance->rule = $rule;
-			$instance->message = $message;
-			$instance->attribute = $attribute;
+            $instance->_validate();
 
-			$instance->_validate();
+            return true;
+        } catch (\Exception $e) {
+            $instance->_errors = $e->getMessage();
 
-			return [];
-		}catch(\Exception $e){
-			var_dump($e->getMessage());
-			return [
-				'error' => $e->getMessage()
-			];
-		}
-	}
+            return false;
+        }
+    }
 
-	public function _validate()
-	{
-		array_walk($this->rule, function($value, $key){
-			$function = '_'.$value;
-			$result = $this->$function($key);
+    /**
+     *验证
+     */
+    private function _validate()
+    {
+        array_walk($this->_rule, function ($value, $key) {
+            $multi_rule = explode('|', $value);
 
-			if(!$result){
-				throw new Exception($this->message[$key]);
-			}
-		});
-	}
+            if (count($multi_rule) > 1) {
+                array_walk($multi_rule, function ($item) use ($key) {
+                    $this->_transfer($item, $key);
+                });
+            } else {
+                $this->_transfer($value, $key);
+            }
+        });
+    }
 
-	public function _required($name)
-	{
-		return !empty($this->data[$name]);
-	}
+    /**
+     * 转发到具体验证方法
+     *
+     * @param $function
+     * @param $name
+     * @throws \Exception
+     */
+    private function _transfer($function, $name)
+    {
+        $search = [':attribute'];
+        $replace = [$this->_attribute[$name]];
 
-	public function _int($name)
-	{
-		var_dump(4);
-	}
+        if (false !== strpos($function, ':')) {
+            $functions = explode(':', $function);
 
-	public function _email()
-	{
-		return false;
-	}
+            $search[] = ':' . $functions[0];
+            $replace[] = $functions[1];
 
-	public function _numeric()
-	{
+            $function = '_' . $functions[0];
+            $result = $this->$function($name, $functions[1]);
+        } else {
+            $function = '_' . $function;
+            $result = $this->$function($name);
+        }
 
-	}
+        if (!$result) {
+            $message_name = $name . '.' . substr($function, 1);
+            if (isset($this->_message[$message_name])) {
+                $message = $this->_message[$message_name];
+            } else {
+                $function_name = substr($function, 1);
+                $message = str_replace($search, $replace, $this->_message[$function_name]);
+            }
 
-	public function _min()
-	{
+            throw new \Exception($message);
+        }
+    }
 
-	}
+    /**
+     * 验证参数必填
+     *
+     * @param $name
+     * @return bool
+     */
+    private function _required($name)
+    {
+        return !empty($this->_data[$name]);
+    }
 
-	public function _max()
-	{
+    /**
+     * 验证是否整形
+     *
+     * @param $name
+     * @return bool
+     */
+    private function _int($name)
+    {
+        return is_int($this->_data[$name]);
+    }
 
-	}
+    /**
+     * 验证邮箱
+     *
+     * @param $name
+     * @return mixed
+     */
+    private function _email($name)
+    {
+        return filter_var($this->_data[$name], FILTER_VALIDATE_EMAIL);
+    }
 
-	public function __call($method, $argument)
-	{
-		throw new Exception("undefined property ".substr($method, 1));
-	}
+    /**
+     * 验证是否是数字
+     *
+     * @param $name
+     * @return bool
+     */
+    private function _numeric($name)
+    {
+        return is_numeric($this->_data[$name]);
+    }
 
-	static public function __callStatic($method, $arguments)
-	{
-		throw new Exception("undefined method $method");
-	}
+    /**
+     * 验证最小输入长度
+     *
+     * @param $name
+     * @param $length
+     * @return bool
+     */
+    private function _min($name, $length)
+    {
+        return strlen($this->_data[$name]) >= $length;
+    }
+
+    /**
+     * 验证字符最大输入长度
+     *
+     * @param $name
+     * @param $length
+     * @return bool
+     */
+    private function _max($name, $length)
+    {
+        return strlen($this->_data[$name]) <= $length;
+    }
+
+    /**
+     * 自定义正则验证
+     *
+     * @param $name
+     */
+    private function _regexp($name)
+    {
+
+    }
+
+    /**
+     * 获取错误信息
+     *
+     * @return string
+     */
+    private function errors()
+    {
+        return $this->_errors;
+    }
+
+    public function __call($method, $argument)
+    {
+        throw new Exception("undefined property " . substr($method, 1));
+    }
+
+    /**
+     * 静态调用
+     *
+     * @param $method
+     * @param $arguments
+     * @return mixed
+     */
+    static public function __callStatic($method, $arguments)
+    {
+        $instance = static::instance();
+
+        return call_user_func_array([$instance, $method], $arguments);
+    }
+
+    private function __clone()
+    {
+        throw new \Exception('不允许复制');
+    }
 }
-
-validate::make(['name' => 'xinzhu', 'title' => 'ceshi', 'email' => '934@qq.com'], ['name' => 'required1', 'title' => 'required', 'email' => 'email']);
-
-
 
